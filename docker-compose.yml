@@ -1,0 +1,14 @@
+services:
+  ghost-browser:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - TOKEN=${TOKEN:-your-secret-token}
+      - MAX_CONCURRENT=${MAX_CONCURRENT:-3}
+      - HEADLESS=${HEADLESS:-true}
+      - CHROME_VERSION=${CHROME_VERSION:-145}
+      - TAB_IDLE_TIMEOUT=${TAB_IDLE_TIMEOUT:-60}
+      - BROWSER_MAX_AGE=${BROWSER_MAX_AGE:-3600}
+    shm_size: '2gb'
+    restart: unless-stopped

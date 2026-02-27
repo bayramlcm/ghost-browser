@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# Virtual Environment
+venv/
+.venv/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Chrome / UC driver
+chromedriver*
+*.png
+*.html
+tracking-result.*
+
+# Docker
+.docker/
+
+# Logs
+*.log
+
+# Misc
+.env
+!.env.example
