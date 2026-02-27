@@ -14,7 +14,7 @@ Antibot bypass yapabilen, browserless mantığında çalışan Docker-based stea
 - **Crash Recovery** — Chrome çökerse otomatik yeniden başlatır
 - **Auto Restart** — 1 saat sonra Chrome otomatik restart (bellek yönetimi)
 - **Bearer Token Auth** — Basit ve güvenli API erişimi
-- **Docker Ready** — Coolify / Docker Compose ile kolayca deploy
+- **Docker Ready** — Docker Compose ile kolayca deploy
 
 ## Hızlı Başlangıç
 
@@ -184,14 +184,6 @@ const { data, timing } = await response.json();
 console.log(data);            // JSON yanıtı
 console.log(timing.total);    // ~300ms
 ```
-
-## Coolify Deploy
-
-1. GitHub repo'yu Coolify'a bağla
-2. **Build Pack**: Dockerfile
-3. **Port**: 3000
-4. **Environment Variables**: `TOKEN`, `MAX_CONCURRENT`, `HEADLESS`, `CHROME_VERSION`
-5. **Resources**: min 2GB RAM, `shm_size: 2gb`
 
 ## Lisans
 

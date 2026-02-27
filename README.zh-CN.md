@@ -14,7 +14,7 @@
 - **崩溃恢复** — Chrome 崩溃后自动重启
 - **定时重启** — 1 小时后自动重启 Chrome（内存管理）
 - **Bearer Token 认证** — 简单安全的 API 访问
-- **Docker 就绪** — 通过 Coolify / Docker Compose 轻松部署
+- **Docker 就绪** — 通过 Docker Compose 轻松部署
 
 ## 快速开始
 

@@ -14,7 +14,7 @@ Aplica patch no binário do Chrome usando `undetected-chromedriver`, expõe auto
 - **Recuperação de Falhas** — Chrome reinicia automaticamente em caso de crash
 - **Reinício Automático** — Chrome reinicia após 1 hora (gerenciamento de memória)
 - **Autenticação Bearer Token** — Acesso API simples e seguro
-- **Pronto para Docker** — Deploy fácil via Coolify / Docker Compose
+- **Pronto para Docker** — Deploy fácil via Docker Compose
 
 ## Início Rápido
 

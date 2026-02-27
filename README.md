@@ -14,7 +14,7 @@ Patches Chrome binary using `undetected-chromedriver`, exposes browser automatio
 - **Crash Recovery** — Chrome auto-restarts on crash
 - **Auto Restart** — Chrome restarts after 1 hour (memory management)
 - **Bearer Token Auth** — Simple and secure API access
-- **Docker Ready** — Easy deploy via Coolify / Docker Compose
+- **Docker Ready** — Easy deploy via Docker Compose
 
 ## Quick Start
 
@@ -201,14 +201,6 @@ const { data, timing } = await response.json();
 console.log(data);            // JSON response
 console.log(timing.total);    // ~300ms
 ```
-
-## Deploy (Coolify)
-
-1. Connect GitHub repo to Coolify
-2. **Build Pack**: Dockerfile
-3. **Port**: 3000
-4. **Environment Variables**: `TOKEN`, `MAX_CONCURRENT`, `HEADLESS`, `CHROME_VERSION`
-5. **Resources**: min 2GB RAM, `shm_size: 2gb`
 
 ## License
 
