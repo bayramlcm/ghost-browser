@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     headless: bool = Field(default=True, description="Chrome headless mod")
     port: int = Field(default=3000, description="API port")
     chrome_version: Optional[int] = Field(default=None, description="Chrome major version (örn: 145)")
+    chrome_binary: Optional[str] = Field(default=None, description="Chrome binary path (Docker: /usr/bin/google-chrome-stable)")
     tab_idle_timeout: int = Field(default=60, description="Idle tab kapatma süresi (saniye)")
     browser_max_age: int = Field(default=3600, description="Chrome max yaşam süresi, restart (saniye)")
 

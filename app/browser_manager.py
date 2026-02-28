@@ -79,15 +79,21 @@ class BrowserManager:
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
 
+        # Docker'da Chrome binary path'ini açıkça belirt
+        if settings.chrome_binary:
+            options.binary_location = settings.chrome_binary
+
         self._driver = uc.Chrome(
             options=options,
             headless=settings.headless,
             use_subprocess=True,
             version_main=settings.chrome_version,
+            browser_executable_path=settings.chrome_binary,
         )
         self._start_time = time.time()
         self._tab_last_active.clear()
         self._active_tabs.clear()
+        self._idle_tabs.clear()
         logger.info("Chrome instance oluşturuldu")
 
     # ─── Health ──────────────────────────────────────────

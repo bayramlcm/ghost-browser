@@ -45,11 +45,16 @@ def create_driver() -> uc.Chrome:
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
 
+    # Docker'da Chrome binary path'ini açıkça belirt
+    if settings.chrome_binary:
+        options.binary_location = settings.chrome_binary
+
     driver = uc.Chrome(
         options=options,
         headless=settings.headless,
         use_subprocess=True,
         version_main=settings.chrome_version,
+        browser_executable_path=settings.chrome_binary,
     )
     return driver
 

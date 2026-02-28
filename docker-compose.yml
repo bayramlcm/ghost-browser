@@ -1,14 +1,21 @@
 services:
   ghost-browser:
     build: .
+    container_name: ghost-browser
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     environment:
-      - TOKEN=${TOKEN:-your-secret-token}
+      - TOKEN=${TOKEN:-}
       - MAX_CONCURRENT=${MAX_CONCURRENT:-3}
       - HEADLESS=${HEADLESS:-true}
       - CHROME_VERSION=${CHROME_VERSION:-145}
       - TAB_IDLE_TIMEOUT=${TAB_IDLE_TIMEOUT:-60}
       - BROWSER_MAX_AGE=${BROWSER_MAX_AGE:-3600}
+      - TIMEOUT=${TIMEOUT:-60}
     shm_size: '2gb'
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
