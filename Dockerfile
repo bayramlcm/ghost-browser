@@ -16,7 +16,7 @@ FROM python:3.11-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Google Chrome official repo
+# Google Chrome official repo + runtime deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl gnupg ca-certificates \
     && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google.gpg \
@@ -26,12 +26,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends \
        google-chrome-stable \
        fonts-liberation \
-       libasound2 \
-       libnss3 \
-       libxss1 \
-       libatk-bridge2.0-0 \
-       libgtk-3-0 \
-       libgbm1 \
        xvfb \
        dbus dbus-x11 \
     && rm -rf /var/lib/apt/lists/*
