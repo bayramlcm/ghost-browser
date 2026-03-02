@@ -104,7 +104,10 @@ class BrowserManager:
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
         options.add_argument("--disable-software-rasterizer")
-        options.add_argument("--single-process")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-background-networking")
+        options.add_argument("--disable-default-apps")
+        options.add_argument("--remote-debugging-port=0")
 
         # Docker'da Chrome binary path'ini açıkça belirt
         if settings.chrome_binary:
