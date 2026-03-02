@@ -45,7 +45,17 @@ class BrowserManager:
     async def start(self):
         """Chrome'u başlat ve cleanup task'ı kur."""
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._create_driver)
+        try:
+            await asyncio.wait_for(
+                loop.run_in_executor(None, self._create_driver),
+                timeout=120  # 2 dakika timeout
+            )
+        except asyncio.TimeoutError:
+            logger.error("Chrome başlatma TIMEOUT (120s) — ChromeDriver indirme veya Chrome başlatma takıldı!")
+            raise RuntimeError("Chrome startup timeout — sunucuda Chrome başlatılamadı")
+        except Exception as e:
+            logger.error(f"Chrome başlatma HATASI: {e}", exc_info=True)
+            raise
         self._started = True
         self._start_time = time.time()
         self._cleanup_task = asyncio.create_task(self._cleanup_loop())
@@ -93,10 +103,15 @@ class BrowserManager:
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
+        options.add_argument("--disable-software-rasterizer")
+        options.add_argument("--single-process")
 
         # Docker'da Chrome binary path'ini açıkça belirt
         if settings.chrome_binary:
             options.binary_location = settings.chrome_binary
+
+        logger.info(f"ChromeDriver oluşturuluyor... (headless={settings.headless}, "
+                     f"version={settings.chrome_version}, binary={settings.chrome_binary})")
 
         self._driver = uc.Chrome(
             options=options,
@@ -105,6 +120,8 @@ class BrowserManager:
             version_main=settings.chrome_version,
             browser_executable_path=settings.chrome_binary,
         )
+
+        logger.info("ChromeDriver oluşturuldu, emülasyon uygulanıyor...")
 
         # Mobil emülasyon — CDP komutu ile
         if platform and platform.isMobile:
