@@ -8,8 +8,9 @@
 ## 功能
 
 - **反机器人绕过** — 通过 `undetected-chromedriver` 对 Chrome 打补丁
+- **平台模拟** — 设备指纹伪装（navigator、WebGL、Client Hints）
 - **持久化浏览器** — Chrome 保持运行，基于标签页的快速请求（`/fetch`）
-- **HTTP API** — FastAPI 端点：`/fetch`、`/navigate`、`/screenshot`、`/health`
+- **HTTP API** — FastAPI 端点：`/fetch`、`/navigate`、`/screenshot`、`/health`、`/platforms`
 - **空闲标签页清理** — 空闲标签页 60 秒后自动关闭
 - **崩溃恢复** — Chrome 崩溃后自动重启
 - **定时重启** — 1 小时后自动重启 Chrome（内存管理）
@@ -42,6 +43,24 @@ uvicorn app.main:app --host 0.0.0.0 --port 3000
 
 ## API
 
+### `GET /health`
+
+服务和浏览器状态检查。
+
+### `GET /platforms`
+
+列出所有支持的平台/设备配置。
+
+```bash
+curl http://localhost:3000/platforms
+```
+
+### `GET /platforms/{id}`
+
+获取指定平台的详细信息。
+
+---
+
 ### `POST /fetch` ⚡（推荐）
 
 **持久化浏览器** — Chrome 保持运行，基于标签页。  
@@ -51,7 +70,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 3000
 curl -X POST http://localhost:3000/fetch \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://jsonplaceholder.typicode.com/todos/1", "returnType": "json"}'
+  -d '{"url": "https://example.com/api", "returnType": "json", "platform": "samsung_s25"}'
 ```
 
 | 字段 | 类型 | 默认值 | 描述 |
@@ -59,6 +78,7 @@ curl -X POST http://localhost:3000/fetch \
 | `url` | string | — | 目标 URL（必填）|
 | `timeout` | int | `0` | 超时（毫秒），0 = 默认 |
 | `returnType` | string | `json` | `json` \| `html` \| `text` \| `screenshot` |
+| `platform` | string | `null` | 平台 ID（参见 `/platforms`）|
 
 ### `POST /navigate`
 
@@ -68,9 +88,15 @@ curl -X POST http://localhost:3000/fetch \
 
 返回 URL 的 PNG 截图。
 
-### `GET /health`
+## 平台
 
-服务和浏览器状态检查。
+| ID | 名称 | 类别 | 备注 |
+|----|------|------|------|
+| `desktop_chrome_windows` | Windows 11 — Chrome | 桌面 | Windows 和 Docker 均可用 |
+| `desktop_chrome_macos` | macOS Sonoma — Chrome | 桌面 | Windows 和 Docker 均可用 |
+| `samsung_s25` | Samsung Galaxy S25 | 移动端 | 仅 Docker 可用 |
+
+> **注意：** 移动平台仅在 Docker（Linux）上可靠运行。
 
 ## 环境变量
 

@@ -8,8 +8,9 @@ Aplica patch no binário do Chrome usando `undetected-chromedriver`, expõe auto
 ## Recursos
 
 - **Bypass Antibot** — Patch do binário do Chrome via `undetected-chromedriver`
+- **Emulação de Plataforma** — Falsificação de impressão digital do dispositivo (navigator, WebGL, Client Hints)
 - **Navegador Persistente** — Chrome permanece aberto, requisições rápidas por abas (`/fetch`)
-- **HTTP API** — Endpoints FastAPI: `/fetch`, `/navigate`, `/screenshot`, `/health`
+- **HTTP API** — Endpoints FastAPI: `/fetch`, `/navigate`, `/screenshot`, `/health`, `/platforms`
 - **Limpeza de Abas** — Abas ociosas fecham automaticamente após 60 segundos
 - **Recuperação de Falhas** — Chrome reinicia automaticamente em caso de crash
 - **Reinício Automático** — Chrome reinicia após 1 hora (gerenciamento de memória)
@@ -42,6 +43,24 @@ uvicorn app.main:app --host 0.0.0.0 --port 3000
 
 ## API
 
+### `GET /health`
+
+Verificação de status do serviço e navegador.
+
+### `GET /platforms`
+
+Listar todos os perfis de plataforma/dispositivo suportados.
+
+```bash
+curl http://localhost:3000/platforms
+```
+
+### `GET /platforms/{id}`
+
+Obter detalhes de uma plataforma específica.
+
+---
+
 ### `POST /fetch` ⚡ (Recomendado)
 
 **Navegador persistente** — Chrome permanece aberto, baseado em abas.  
@@ -51,7 +70,7 @@ Muito mais rápido que `/navigate` pois o Chrome não reinicia.
 curl -X POST http://localhost:3000/fetch \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://jsonplaceholder.typicode.com/todos/1", "returnType": "json"}'
+  -d '{"url": "https://example.com/api", "returnType": "json", "platform": "samsung_s25"}'
 ```
 
 | Campo | Tipo | Padrão | Descrição |
@@ -59,6 +78,7 @@ curl -X POST http://localhost:3000/fetch \
 | `url` | string | — | URL alvo (obrigatório) |
 | `timeout` | int | `0` | Timeout (ms), 0 = padrão |
 | `returnType` | string | `json` | `json` \| `html` \| `text` \| `screenshot` |
+| `platform` | string | `null` | ID da plataforma (ver `/platforms`) |
 
 ### `POST /navigate`
 
@@ -68,9 +88,15 @@ Abre nova instância do Chrome por requisição. Mais lento, porém isolado.
 
 Retorna screenshot PNG da URL.
 
-### `GET /health`
+## Plataformas
 
-Verificação de status do serviço e navegador.
+| ID | Nome | Categoria | Notas |
+|----|------|-----------|-------|
+| `desktop_chrome_windows` | Windows 11 — Chrome | Desktop | Funciona em Windows e Docker |
+| `desktop_chrome_macos` | macOS Sonoma — Chrome | Desktop | Funciona em Windows e Docker |
+| `samsung_s25` | Samsung Galaxy S25 | Móvel | Apenas Docker |
+
+> **Nota:** Plataformas móveis funcionam de forma confiável apenas no Docker (Linux).
 
 ## Variáveis de Ambiente
 

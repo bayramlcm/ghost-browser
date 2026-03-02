@@ -8,8 +8,9 @@
 ## Возможности
 
 - **Обход антибота** — Патч бинарного файла Chrome через `undetected-chromedriver`
+- **Эмуляция платформы** — Подмена отпечатка устройства (navigator, WebGL, Client Hints)
 - **Постоянный браузер** — Chrome остаётся открытым, быстрые запросы через вкладки (`/fetch`)
-- **HTTP API** — Эндпоинты FastAPI: `/fetch`, `/navigate`, `/screenshot`, `/health`
+- **HTTP API** — Эндпоинты FastAPI: `/fetch`, `/navigate`, `/screenshot`, `/health`, `/platforms`
 - **Очистка вкладок** — Неактивные вкладки автоматически закрываются через 60 секунд
 - **Восстановление после сбоев** — Chrome автоматически перезапускается при падении
 - **Автоперезапуск** — Chrome перезапускается через 1 час (управление памятью)
@@ -42,6 +43,24 @@ uvicorn app.main:app --host 0.0.0.0 --port 3000
 
 ## API
 
+### `GET /health`
+
+Проверка состояния сервиса и браузера.
+
+### `GET /platforms`
+
+Список всех поддерживаемых профилей платформ/устройств.
+
+```bash
+curl http://localhost:3000/platforms
+```
+
+### `GET /platforms/{id}`
+
+Получить детали конкретной платформы.
+
+---
+
 ### `POST /fetch` ⚡ (Рекомендуется)
 
 **Постоянный браузер** — Chrome остаётся открытым, работа через вкладки.  
@@ -51,7 +70,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 3000
 curl -X POST http://localhost:3000/fetch \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://jsonplaceholder.typicode.com/todos/1", "returnType": "json"}'
+  -d '{"url": "https://example.com/api", "returnType": "json", "platform": "samsung_s25"}'
 ```
 
 | Поле | Тип | По умолчанию | Описание |
@@ -59,6 +78,7 @@ curl -X POST http://localhost:3000/fetch \
 | `url` | string | — | Целевой URL (обязательно) |
 | `timeout` | int | `0` | Таймаут (мс), 0 = по умолчанию |
 | `returnType` | string | `json` | `json` \| `html` \| `text` \| `screenshot` |
+| `platform` | string | `null` | ID платформы (см. `/platforms`) |
 
 ### `POST /navigate`
 
@@ -68,9 +88,15 @@ curl -X POST http://localhost:3000/fetch \
 
 Возвращает PNG-скриншот URL.
 
-### `GET /health`
+## Платформы
 
-Проверка состояния сервиса и браузера.
+| ID | Название | Категория | Примечание |
+|----|----------|-----------|------------|
+| `desktop_chrome_windows` | Windows 11 — Chrome | Десктоп | Работает на Windows и Docker |
+| `desktop_chrome_macos` | macOS Sonoma — Chrome | Десктоп | Работает на Windows и Docker |
+| `samsung_s25` | Samsung Galaxy S25 | Мобильный | Только Docker |
+
+> **Примечание:** Мобильные платформы надёжно работают только в Docker (Linux).
 
 ## Переменные окружения
 

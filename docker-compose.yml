@@ -12,6 +12,7 @@ services:
       - TAB_IDLE_TIMEOUT=${TAB_IDLE_TIMEOUT:-60}
       - BROWSER_MAX_AGE=${BROWSER_MAX_AGE:-3600}
       - TIMEOUT=${TIMEOUT:-60}
+      - PORT=${PORT:-3000}
     shm_size: '2gb'
     restart: unless-stopped
     logging:

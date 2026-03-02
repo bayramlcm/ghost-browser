@@ -8,8 +8,9 @@ Patches Chrome binary using `undetected-chromedriver`, exposes browser automatio
 ## Features
 
 - **Antibot Bypass** — Chrome binary patch via `undetected-chromedriver`
+- **Platform Emulation** — Device fingerprint spoofing (navigator, WebGL, Client Hints)
 - **Persistent Browser** — Chrome stays open, tab-based fast requests (`/fetch`)
-- **HTTP API** — FastAPI endpoints: `/fetch`, `/navigate`, `/screenshot`, `/health`
+- **HTTP API** — FastAPI endpoints: `/fetch`, `/navigate`, `/screenshot`, `/health`, `/platforms`
 - **Idle Tab Cleanup** — Idle tabs auto-close after 60 seconds
 - **Crash Recovery** — Chrome auto-restarts on crash
 - **Auto Restart** — Chrome restarts after 1 hour (memory management)
@@ -69,6 +70,35 @@ curl http://localhost:3000/health
 
 ---
 
+### `GET /platforms`
+
+List all supported platform profiles.
+
+```bash
+curl http://localhost:3000/platforms
+```
+
+```json
+{
+  "total": 3,
+  "platforms": [
+    { "id": "desktop_chrome_windows", "name": "Windows 11 — Chrome", "category": "desktop" },
+    { "id": "desktop_chrome_macos", "name": "macOS Sonoma — Chrome", "category": "desktop" },
+    { "id": "samsung_s25", "name": "Samsung Galaxy S25", "category": "mobile" }
+  ]
+}
+```
+
+### `GET /platforms/{id}`
+
+Get details for a specific platform.
+
+```bash
+curl http://localhost:3000/platforms/samsung_s25
+```
+
+---
+
 ### `POST /fetch` ⚡ (Recommended)
 
 **Persistent browser** — Chrome stays open, tab-based.  
@@ -78,7 +108,7 @@ Much faster than `/navigate` since Chrome doesn't restart.
 curl -X POST http://localhost:3000/fetch \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://jsonplaceholder.typicode.com/todos/1", "returnType": "json"}'
+  -d '{"url": "https://example.com/api", "returnType": "json", "platform": "samsung_s25"}'
 ```
 
 **Request Body:**
@@ -88,15 +118,16 @@ curl -X POST http://localhost:3000/fetch \
 | `url` | string | — | Target URL (required) |
 | `timeout` | int | `0` | Timeout (ms), 0 = config default |
 | `returnType` | string | `json` | `json` \| `html` \| `text` \| `screenshot` |
+| `platform` | string | `null` | Platform ID (see `/platforms`) |
 
 **Response:**
 
 ```json
 {
   "success": true,
-  "url": "https://jsonplaceholder.typicode.com/todos/1",
+  "url": "https://example.com/api",
   "statusCode": 200,
-  "data": { "userId": 1, "id": 1, "title": "...", "completed": false },
+  "data": { "result": "..." },
   "cookies": [],
   "timing": { "total": 350, "challenge": 280 }
 }
@@ -119,7 +150,7 @@ Opens a new Chrome instance per request. Slower but isolated.
 curl -X POST http://localhost:3000/navigate \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com", "returnType": "json"}'
+  -d '{"url": "https://example.com", "returnType": "json", "platform": "desktop_chrome_macos"}'
 ```
 
 **Request Body:**
@@ -131,6 +162,7 @@ curl -X POST http://localhost:3000/navigate \
 | `waitSelector` | string | `null` | CSS selector (if `waitFor=selector`) |
 | `timeout` | int | `0` | Timeout (ms), 0 = config default |
 | `returnType` | string | `json` | `json` \| `html` \| `text` \| `screenshot` |
+| `platform` | string | `null` | Platform ID (see `/platforms`) |
 
 ---
 
@@ -142,7 +174,7 @@ Returns a PNG screenshot of the URL.
 curl -X POST http://localhost:3000/screenshot \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com"}' \
+  -d '{"url": "https://example.com", "platform": "desktop_chrome_macos"}' \
   --output screenshot.png
 ```
 
@@ -157,6 +189,25 @@ Authorization: Bearer <TOKEN>
 ```
 
 Use the 🔒 **Authorize** button in Swagger UI (`/docs`) to enter your token.
+
+## Platforms
+
+Ghost Browser can emulate different devices to bypass antibot fingerprint checks. Each platform overrides:
+
+- **User-Agent** — HTTP header and `navigator.userAgent`
+- **Client Hints** — `sec-ch-ua`, `sec-ch-ua-platform`, `sec-ch-ua-model`
+- **Navigator** — `navigator.platform`, `appVersion`, `vendor`, `maxTouchPoints`
+- **WebGL** — GPU vendor/renderer fingerprint
+- **Screen** — Resolution, orientation, devicePixelRatio
+- **Device** — `hardwareConcurrency`, `deviceMemory`
+
+| ID | Name | Category | Notes |
+|----|------|----------|-------|
+| `desktop_chrome_windows` | Windows 11 — Chrome | Desktop | Works on Windows & Docker |
+| `desktop_chrome_macos` | macOS Sonoma — Chrome | Desktop | Works on Windows & Docker |
+| `samsung_s25` | Samsung Galaxy S25 | Mobile | Works on Docker only |
+
+> **Note:** Mobile platforms (Samsung, etc.) only work reliably on Docker (Linux), because canvas/font fingerprints from a Windows host don't match mobile device signatures.
 
 ## Environment Variables
 
@@ -191,8 +242,9 @@ const response = await fetch("http://localhost:3000/fetch", {
     "Authorization": "Bearer your-secret-token"
   },
   body: JSON.stringify({
-    url: "https://jsonplaceholder.typicode.com/todos/1",
+    url: "https://example.com/api/data",
     returnType: "json",
+    platform: "samsung_s25",
     timeout: 60000
   })
 });

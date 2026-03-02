@@ -8,8 +8,9 @@ Antibot bypass yapabilen, browserless mantığında çalışan Docker-based stea
 ## Özellikler
 
 - **Antibot Bypass** — `undetected-chromedriver` ile Chrome binary patch
+- **Platform Emülasyonu** — Cihaz parmak izi taklit (navigator, WebGL, Client Hints)
 - **Persistent Browser** — Chrome her zaman açık, tab bazlı hızlı istek (`/fetch`)
-- **HTTP API** — FastAPI ile `/fetch`, `/navigate`, `/screenshot`, `/health` endpointleri
+- **HTTP API** — FastAPI ile `/fetch`, `/navigate`, `/screenshot`, `/health`, `/platforms`
 - **Idle Tab Cleanup** — 60 saniye idle tab otomatik kapanır
 - **Crash Recovery** — Chrome çökerse otomatik yeniden başlatır
 - **Auto Restart** — 1 saat sonra Chrome otomatik restart (bellek yönetimi)
@@ -69,6 +70,35 @@ curl http://localhost:3000/health
 
 ---
 
+### `GET /platforms`
+
+Desteklenen tüm platform/cihaz profillerini listele.
+
+```bash
+curl http://localhost:3000/platforms
+```
+
+```json
+{
+  "total": 3,
+  "platforms": [
+    { "id": "desktop_chrome_windows", "name": "Windows 11 — Chrome", "category": "desktop" },
+    { "id": "desktop_chrome_macos", "name": "macOS Sonoma — Chrome", "category": "desktop" },
+    { "id": "samsung_s25", "name": "Samsung Galaxy S25", "category": "mobile" }
+  ]
+}
+```
+
+### `GET /platforms/{id}`
+
+Belirtilen platformun detaylarını döndür.
+
+```bash
+curl http://localhost:3000/platforms/samsung_s25
+```
+
+---
+
 ### `POST /fetch` ⚡ (Önerilen)
 
 **Persistent browser** ile URL'e git — Chrome açık kalır, tab bazlı.  
@@ -78,7 +108,7 @@ curl http://localhost:3000/health
 curl -X POST http://localhost:3000/fetch \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://jsonplaceholder.typicode.com/todos/1", "returnType": "json"}'
+  -d '{"url": "https://example.com/api", "returnType": "json", "platform": "samsung_s25"}'
 ```
 
 | Alan | Tip | Default | Açıklama |
@@ -86,6 +116,20 @@ curl -X POST http://localhost:3000/fetch \
 | `url` | string | — | Hedef URL (zorunlu) |
 | `timeout` | int | `0` | Timeout (ms), 0 = config default |
 | `returnType` | string | `json` | `json` \| `html` \| `text` \| `screenshot` |
+| `platform` | string | `null` | Platform ID (`/platforms`'dan bakılabilir) |
+
+**Yanıt:**
+
+```json
+{
+  "success": true,
+  "url": "https://example.com/api",
+  "statusCode": 200,
+  "data": { "result": "..." },
+  "cookies": [],
+  "timing": { "total": 350, "challenge": 280 }
+}
+```
 
 **Persistent Browser Davranışı:**
 - İlk istek: Chrome zaten açık, yeni tab açar (~300ms)
@@ -104,7 +148,7 @@ Her istekte yeni Chrome instance açar. Daha yavaş ama izole.
 curl -X POST http://localhost:3000/navigate \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com", "returnType": "json"}'
+  -d '{"url": "https://example.com", "returnType": "json", "platform": "desktop_chrome_macos"}'
 ```
 
 | Alan | Tip | Default | Açıklama |
@@ -114,6 +158,7 @@ curl -X POST http://localhost:3000/navigate \
 | `waitSelector` | string | `null` | CSS selector (`waitFor=selector` ise) |
 | `timeout` | int | `0` | Timeout (ms), 0 = config default |
 | `returnType` | string | `json` | `json` \| `html` \| `text` \| `screenshot` |
+| `platform` | string | `null` | Platform ID (`/platforms`'dan bakılabilir) |
 
 ---
 
@@ -125,7 +170,7 @@ URL'in screenshot'ını PNG olarak döndür.
 curl -X POST http://localhost:3000/screenshot \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com"}' \
+  -d '{"url": "https://example.com", "platform": "desktop_chrome_macos"}' \
   --output screenshot.png
 ```
 
@@ -140,6 +185,25 @@ Authorization: Bearer <TOKEN>
 ```
 
 Swagger UI'dan (`/docs`) test ederken 🔒 **Authorize** butonuyla token girebilirsiniz.
+
+## Platformlar
+
+Ghost Browser, antibot parmak izi kontrollerini aşmak için farklı cihazları taklit edebilir. Her platform şunları override eder:
+
+- **User-Agent** — HTTP header ve `navigator.userAgent`
+- **Client Hints** — `sec-ch-ua`, `sec-ch-ua-platform`, `sec-ch-ua-model`
+- **Navigator** — `navigator.platform`, `appVersion`, `vendor`, `maxTouchPoints`
+- **WebGL** — GPU vendor/renderer parmak izi
+- **Ekran** — Çözünürlük, oryantasyon, devicePixelRatio
+- **Cihaz** — `hardwareConcurrency`, `deviceMemory`
+
+| ID | İsim | Kategori | Not |
+|----|------|----------|-----|
+| `desktop_chrome_windows` | Windows 11 — Chrome | Desktop | Windows & Docker'da çalışır |
+| `desktop_chrome_macos` | macOS Sonoma — Chrome | Desktop | Windows & Docker'da çalışır |
+| `samsung_s25` | Samsung Galaxy S25 | Mobile | Sadece Docker'da çalışır |
+
+> **Not:** Mobil platformlar (Samsung vb.) sadece Docker (Linux) üzerinde güvenilir çalışır. Windows host'taki canvas/font parmak izleri mobil cihaz imzalarıyla eşleşmez.
 
 ## Ortam Değişkenleri
 
@@ -174,8 +238,9 @@ const response = await fetch("http://localhost:3000/fetch", {
     "Authorization": "Bearer your-secret-token"
   },
   body: JSON.stringify({
-    url: "https://jsonplaceholder.typicode.com/todos/1",
+    url: "https://example.com/api/data",
     returnType: "json",
+    platform: "samsung_s25",
     timeout: 60000
   })
 });

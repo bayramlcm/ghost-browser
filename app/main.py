@@ -12,13 +12,20 @@ from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.browser import navigate, take_screenshot
 from app.browser_manager import manager
+from app.platforms import get_platform, get_all_platforms
+from app.schemas import (
+    NavigateRequest,
+    BrowseRequest,
+    ScreenshotRequest,
+    BrowseResponse,
+    HealthResponse,
+)
 
-# ─── Logging ─────────────────────────────────────────────
+# ─── Logging ─────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -26,21 +33,19 @@ logging.basicConfig(
 logger = logging.getLogger("ghost-browser")
 
 
-# ─── Lifespan ────────────────────────────────────────────
+# ─── Lifespan ────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown hooks."""
     logger.info(f"Ghost Browser başlatıldı — port:{settings.port}, "
                 f"max_concurrent:{settings.max_concurrent}, headless:{settings.headless}")
-    # Persistent browser'ı başlat
     await manager.start()
     yield
-    # Persistent browser'ı kapat
     await manager.shutdown()
     logger.info("Ghost Browser kapatılıyor...")
 
 
-# ─── FastAPI App ─────────────────────────────────────────
+# ─── App ─────────────────────────────────────────────────────
 app = FastAPI(
     title="Ghost Browser",
     description="Stealth browser service with antibot bypass — undetected-chromedriver",
@@ -49,14 +54,13 @@ app = FastAPI(
 )
 
 
-# ─── Auth ────────────────────────────────────────────────
+# ─── Auth ────────────────────────────────────────────────────
 security = HTTPBearer(auto_error=False)
 
 
 async def verify_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
     """Bearer token doğrulama."""
     if not settings.token:
-        # Token yapılandırılmamışsa auth gerekli değil
         return
 
     if not credentials:
@@ -66,48 +70,11 @@ async def verify_token(credentials: Optional[HTTPAuthorizationCredentials] = Dep
         raise HTTPException(status_code=403, detail="Geçersiz token")
 
 
-# ─── Request / Response Models ───────────────────────────
-class NavigateRequest(BaseModel):
-    url: str
-    waitFor: str = Field(default="networkidle", description="networkidle | selector | timeout")
-    waitSelector: Optional[str] = Field(default=None, description="CSS selector (waitFor=selector ise)")
-    timeout: int = Field(default=0, description="Timeout (ms), 0 = config default")
-    returnType: str = Field(default="json", description="json | html | text | screenshot")
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  HEALTH
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-
-class NavigateResponse(BaseModel):
-    success: bool
-    url: str
-    statusCode: int
-    data: object = None
-    error: Optional[str] = None
-    cookies: list = []
-    timing: dict = {}
-
-
-class ScreenshotRequest(BaseModel):
-    url: str
-    fullPage: bool = Field(default=True)
-    viewport: dict = Field(default={"width": 1920, "height": 1080})
-    timeout: int = Field(default=0, description="Timeout (ms), 0 = config default")
-
-
-class HealthResponse(BaseModel):
-    status: str
-    version: str
-    max_concurrent: int
-    headless: bool
-    browser: Optional[dict] = None
-
-
-class FetchRequest(BaseModel):
-    url: str
-    timeout: int = Field(default=0, description="Timeout (ms), 0 = config default")
-    returnType: str = Field(default="json", description="json | html | text | screenshot")
-
-
-# ─── Endpoints ───────────────────────────────────────────
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health():
     """Servis durumu kontrolü."""
     return HealthResponse(
@@ -119,33 +86,72 @@ async def health():
     )
 
 
-@app.post("/navigate", response_model=NavigateResponse)
-async def navigate_endpoint(
-    req: NavigateRequest,
-    _=Depends(verify_token),
-):
-    """
-    Bir URL'e git, antibot challenge'ını geç, sonucu döndür.
-    """
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  PLATFORMS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+@app.get("/platforms", tags=["Platforms"])
+async def list_platforms():
+    """Tüm desteklenen platform/cihaz profillerini listele."""
+    platforms = get_all_platforms()
+    return {
+        "total": len(platforms),
+        "platforms": [p.model_dump() for p in platforms],
+    }
+
+
+@app.get("/platforms/{platform_id}", tags=["Platforms"])
+async def get_platform_detail(platform_id: str):
+    """Belirtilen platformın detaylarını döndür."""
+    platform = get_platform(platform_id)
+    if not platform:
+        raise HTTPException(status_code=404, detail=f"Platform bulunamadı: {platform_id}")
+    return platform.model_dump()
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  BROWSER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@app.post("/navigate", response_model=BrowseResponse, tags=["Browser"])
+async def navigate_endpoint(req: NavigateRequest, _=Depends(verify_token)):
+    """
+    Yeni Chrome instance ile URL'e git.
+
+    Her istek için Chrome başlatılır, antibot challenge geçilir,
+    sonuç döndürülür ve Chrome kapatılır. Güvenli ama yavaş.
+    """
     result = await navigate(
         url=req.url,
         wait_for=req.waitFor,
         wait_selector=req.waitSelector,
         timeout=req.timeout,
         return_type=req.returnType,
+        platform_id=req.platform,
     )
+    return BrowseResponse(**result)
 
-    return NavigateResponse(**result)
+
+@app.post("/fetch", response_model=BrowseResponse, tags=["Browser"])
+async def fetch_endpoint(req: BrowseRequest, _=Depends(verify_token)):
+    """
+    Persistent browser ile URL'e git (hızlı).
+
+    Chrome sürekli açık kalır, her istek yeni tab açar.
+    /navigate'den ~10x daha hızlı. Antibot cookie'leri korunur.
+    """
+    result = await manager.fetch(
+        url=req.url,
+        timeout=req.timeout,
+        return_type=req.returnType,
+        platform_id=req.platform,
+    )
+    return BrowseResponse(**result)
 
 
-@app.post("/screenshot")
-async def screenshot_endpoint(
-    req: ScreenshotRequest,
-    _=Depends(verify_token),
-):
+@app.post("/screenshot", tags=["Browser"])
+async def screenshot_endpoint(req: ScreenshotRequest, _=Depends(verify_token)):
     """URL'in screenshot'ını PNG olarak döndür."""
-
     width = req.viewport.get("width", 1920)
     height = req.viewport.get("height", 1080)
 
@@ -156,6 +162,7 @@ async def screenshot_endpoint(
             width=width,
             height=height,
             timeout=req.timeout,
+            platform_id=req.platform,
         )
         return Response(content=png_bytes, media_type="image/png")
     except Exception as e:
@@ -163,24 +170,7 @@ async def screenshot_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/fetch", response_model=NavigateResponse)
-async def fetch_endpoint(
-    req: FetchRequest,
-    _=Depends(verify_token),
-):
-    """
-    Persistent browser ile URL'e git — Chrome açık kalır, tab bazlı.
-    /navigate'den çok daha hızlı (Chrome yeniden başlatılmaz).
-    """
-    result = await manager.fetch(
-        url=req.url,
-        timeout=req.timeout,
-        return_type=req.returnType,
-    )
-    return NavigateResponse(**result)
-
-
-# ─── Uvicorn entrypoint ─────────────────────────────────
+# ─── Entrypoint ──────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
 

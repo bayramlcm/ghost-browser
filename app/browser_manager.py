@@ -14,6 +14,7 @@ from typing import Optional
 import undetected_chromedriver as uc
 
 from app.config import settings
+from app.platforms import get_platform, Platform, NavigatorOverride
 
 logger = logging.getLogger("ghost-browser")
 
@@ -69,11 +70,25 @@ class BrowserManager:
 
         logger.info("BrowserManager kapatıldı")
 
-    def _create_driver(self):
+    def _create_driver(self, platform_id: Optional[str] = None):
         """UC Chrome instance oluştur."""
+        platform = get_platform(platform_id) if platform_id else None
+
         options = uc.ChromeOptions()
-        options.add_argument("--window-size=1920,1080")
-        options.add_argument("--lang=ru-RU")
+
+        # Viewport — platformdan veya default
+        vp_w = platform.viewport["width"] if platform else 1920
+        vp_h = platform.viewport["height"] if platform else 1080
+        options.add_argument(f"--window-size={vp_w},{vp_h}")
+
+        # Dil — platformdan veya default
+        lang = platform.lang if platform else "en-US"
+        options.add_argument(f"--lang={lang}")
+
+        # User-Agent
+        if platform:
+            options.add_argument(f"--user-agent={platform.userAgent}")
+
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
@@ -90,11 +105,21 @@ class BrowserManager:
             version_main=settings.chrome_version,
             browser_executable_path=settings.chrome_binary,
         )
+
+        # Mobil emülasyon — CDP komutu ile
+        if platform and platform.isMobile:
+            self._apply_mobile_emulation(platform)
+
+        # Navigator fingerprint override — antibot bypass
+        if platform and platform.navigatorOverride:
+            from app.browser import _apply_navigator_override
+            _apply_navigator_override(self._driver, platform)
+
         self._start_time = time.time()
         self._tab_last_active.clear()
         self._active_tabs.clear()
         self._idle_tabs.clear()
-        logger.info("Chrome instance oluşturuldu")
+        logger.info(f"Chrome instance oluşturuldu{' — ' + platform.name if platform else ''}")
 
     # ─── Health ──────────────────────────────────────────
 
@@ -143,16 +168,88 @@ class BrowserManager:
 
     # ─── Fetch ───────────────────────────────────────────
 
+    def _apply_mobile_emulation(self, platform: Platform):
+        """CDP komutu ile mobil cihaz emülasyonu uygula."""
+        try:
+            self._driver.execute_cdp_cmd("Emulation.setDeviceMetricsOverride", {
+                "width": platform.viewport["width"],
+                "height": platform.viewport["height"],
+                "deviceScaleFactor": platform.deviceScaleFactor,
+                "mobile": platform.isMobile,
+            })
+            self._driver.execute_cdp_cmd("Emulation.setTouchEmulationEnabled", {
+                "enabled": platform.hasTouch,
+            })
+            logger.info(f"Mobil emülasyon uygulandı: {platform.name}")
+        except Exception as e:
+            logger.warning(f"Mobil emülasyon hatası: {e}")
+
+    def _apply_platform_to_tab(self, platform: Platform):
+        """Tab bazlı CDP ile user-agent, viewport ve navigator override uygula."""
+        try:
+            # 1. User-Agent + Client Hints — tam navigator override
+            nav = platform.navigatorOverride
+            if nav:
+                ua_override = {
+                    "userAgent": platform.userAgent,
+                    "platform": nav.platform,
+                }
+                if nav.brands:
+                    ua_override["userAgentMetadata"] = {
+                        "brands": [{"brand": b["brand"], "version": b["version"]} for b in nav.brands],
+                        "fullVersionList": [{"brand": b["brand"], "version": nav.uaFullVersion} for b in nav.brands],
+                        "platform": nav.uaPlatform,
+                        "platformVersion": nav.uaPlatformVersion,
+                        "architecture": "arm" if "arm" in nav.platform.lower() else "x86",
+                        "model": nav.uaModel,
+                        "mobile": nav.uaMobile,
+                        "bitness": "64",
+                        "wow64": False,
+                    }
+                self._driver.execute_cdp_cmd("Network.setUserAgentOverride", ua_override)
+            else:
+                self._driver.execute_cdp_cmd("Network.setUserAgentOverride", {
+                    "userAgent": platform.userAgent,
+                })
+
+            # 2. Viewport / Device metrics
+            self._driver.execute_cdp_cmd("Emulation.setDeviceMetricsOverride", {
+                "width": platform.viewport["width"],
+                "height": platform.viewport["height"],
+                "deviceScaleFactor": platform.deviceScaleFactor,
+                "mobile": platform.isMobile,
+            })
+
+            # 3. Touch emulation
+            if platform.hasTouch:
+                self._driver.execute_cdp_cmd("Emulation.setTouchEmulationEnabled", {
+                    "enabled": True,
+                })
+
+            # 4. JS injection — navigator properties override
+            if nav:
+                from app.browser import _build_navigator_override_js
+                override_js = _build_navigator_override_js(platform)
+                self._driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+                    "source": override_js,
+                })
+
+            logger.info(f"Tab platform override: {platform.name} → {nav.platform if nav else 'default'}")
+        except Exception as e:
+            logger.warning(f"Tab platform override hatası: {e}")
+
     async def fetch(self, url: str, timeout: int = 0,
-                    return_type: str = "json") -> dict:
+                    return_type: str = "json",
+                    platform_id: Optional[str] = None) -> dict:
         """
         Persistent browser ile URL'e git ve sonucu döndür.
 
         1. Yeni tab aç
-        2. URL'e navigate et
-        3. Challenge bekle
-        4. Sonucu topla
-        5. Tab'ı idle'a al (about:blank)
+        2. Platform override uygula (CDP)
+        3. URL'e navigate et
+        4. Challenge bekle
+        5. Sonucu topla
+        6. Tab'ı idle'a al
         """
         timeout_s = (timeout / 1000) if timeout > 0 else settings.timeout
 
@@ -163,7 +260,7 @@ class BrowserManager:
 
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
-            None, self._fetch_sync, url, timeout_s, return_type
+            None, self._fetch_sync, url, timeout_s, return_type, platform_id
         )
 
     def _get_or_create_tab(self, driver) -> str:
@@ -186,7 +283,8 @@ class BrowserManager:
         driver.switch_to.window(new_handle)
         return new_handle
 
-    def _fetch_sync(self, url: str, timeout_s: float, return_type: str) -> dict:
+    def _fetch_sync(self, url: str, timeout_s: float, return_type: str,
+                    platform_id: Optional[str] = None) -> dict:
         """Senkron fetch işlemi — tab bazlı, idle tab reuse."""
         start_time = time.time()
         tab_handle = None
@@ -197,6 +295,11 @@ class BrowserManager:
             # Tab al (idle varsa reuse, yoksa yeni)
             tab_handle = self._get_or_create_tab(driver)
             self._active_tabs.add(tab_handle)
+
+            # Platform override uygula (tab bazlı CDP)
+            platform = get_platform(platform_id) if platform_id else None
+            if platform:
+                self._apply_platform_to_tab(platform)
 
             logger.info(f"Tab ({tab_handle[:8]}...) → {url}")
 
