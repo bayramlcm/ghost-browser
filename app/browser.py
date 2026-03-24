@@ -12,6 +12,8 @@ import logging
 import base64
 from typing import Optional
 
+from app.process_cleanup import force_quit_driver, cleanup_zombie_processes
+
 import undetected_chromedriver as uc
 
 from app.config import settings
@@ -414,11 +416,7 @@ def _navigate_sync(url: str, wait_for: str, wait_selector: Optional[str],
             "timing": {"total": total_time, "challenge": 0},
         }
     finally:
-        if driver:
-            try:
-                driver.quit()
-            except Exception:
-                pass
+        force_quit_driver(driver)
 
 
 def _wait_for_network_idle(driver, timeout_s: float):
@@ -560,8 +558,4 @@ def _screenshot_sync(url: str, full_page: bool, width: int, height: int,
         return driver.get_screenshot_as_png()
 
     finally:
-        if driver:
-            try:
-                driver.quit()
-            except Exception:
-                pass
+        force_quit_driver(driver)

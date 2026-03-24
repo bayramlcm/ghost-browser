@@ -17,6 +17,7 @@ from app.config import settings
 from app.browser import navigate, take_screenshot
 from app.browser_manager import manager
 from app.platforms import get_platform, get_all_platforms
+from app.process_cleanup import get_fd_info
 from app.schemas import (
     NavigateRequest,
     BrowseRequest,
@@ -83,6 +84,7 @@ async def health():
         max_concurrent=settings.max_concurrent,
         headless=settings.headless,
         browser=manager.get_status(),
+        file_descriptors=get_fd_info(),
     )
 
 

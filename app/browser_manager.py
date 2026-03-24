@@ -15,6 +15,7 @@ import undetected_chromedriver as uc
 
 from app.config import settings
 from app.platforms import get_platform, Platform, NavigatorOverride
+from app.process_cleanup import force_quit_driver, cleanup_zombie_processes, get_fd_info, kill_chrome_tree
 
 logger = logging.getLogger("ghost-browser")
 
@@ -39,6 +40,7 @@ class BrowserManager:
         self._started = False
         self._start_time: float = 0
         self._request_count: int = 0
+        self._max_requests_before_restart: int = 500  # Her 500 istekte Chrome restart
 
     # ─── Lifecycle ───────────────────────────────────────
 
@@ -72,16 +74,22 @@ class BrowserManager:
                 pass
 
         if self._driver:
-            try:
-                self._driver.quit()
-            except Exception:
-                pass
+            force_quit_driver(self._driver)
             self._driver = None
 
+        # Son zombie temizliği
+        cleanup_zombie_processes()
         logger.info("BrowserManager kapatıldı")
 
     def _create_driver(self, platform_id: Optional[str] = None):
-        """UC Chrome instance oluştur."""
+        """UC Chrome instance oluştur. Eski driver varsa process tree'sini öldür."""
+        # Eski driver'ı temizle (restart senaryosu)
+        if self._driver:
+            logger.info("Eski Chrome instance temizleniyor...")
+            force_quit_driver(self._driver)
+            self._driver = None
+            cleanup_zombie_processes()
+
         platform = get_platform(platform_id) if platform_id else None
 
         options = uc.ChromeOptions()
@@ -161,30 +169,37 @@ class BrowserManager:
         if not alive:
             logger.warning("Chrome ölmüş — yeniden başlatılıyor...")
             if self._driver:
-                try:
-                    self._driver.quit()
-                except Exception:
-                    pass
+                force_quit_driver(self._driver)
+                self._driver = None
+            cleanup_zombie_processes()
             await loop.run_in_executor(None, self._create_driver)
 
     async def _check_max_age(self):
-        """Chrome max yaşını aştıysa yeniden başlat."""
-        if settings.browser_max_age <= 0:
-            return
+        """Chrome max yaşını veya istek limitini aştıysa yeniden başlat."""
+        should_restart = False
+        reason = ""
 
-        age = time.time() - self._start_time
-        if age > settings.browser_max_age:
-            logger.info(f"Chrome max yaşı aştı ({int(age)}s) — yeniden başlatılıyor...")
+        # Yaş kontrolü
+        if settings.browser_max_age > 0:
+            age = time.time() - self._start_time
+            if age > settings.browser_max_age:
+                should_restart = True
+                reason = f"max yaş aşıldı ({int(age)}s)"
+
+        # İstek sayısı kontrolü (FD sızıntısını sınırlamak için)
+        if self._request_count >= self._max_requests_before_restart:
+            should_restart = True
+            reason = f"istek limiti aşıldı ({self._request_count})"
+
+        if should_restart and not self._active_tabs:
+            logger.info(f"Chrome yeniden başlatılıyor — {reason}")
             loop = asyncio.get_event_loop()
-
-            # Aktif tab yoksa restart
-            if not self._active_tabs:
-                if self._driver:
-                    try:
-                        self._driver.quit()
-                    except Exception:
-                        pass
-                await loop.run_in_executor(None, self._create_driver)
+            if self._driver:
+                force_quit_driver(self._driver)
+                self._driver = None
+            cleanup_zombie_processes()
+            await loop.run_in_executor(None, self._create_driver)
+            self._request_count = 0
 
     # ─── Fetch ───────────────────────────────────────────
 
@@ -388,12 +403,26 @@ class BrowserManager:
     # ─── Tab Cleanup ─────────────────────────────────────
 
     async def _cleanup_loop(self):
-        """Background task — idle tab'ları periyodik temizle."""
+        """Background task — idle tab'ları periyodik temizle, zombie reap, FD izle."""
         while self._started:
             try:
                 await asyncio.sleep(10)
                 await self._cleanup_idle_tabs()
                 await self._check_max_age()
+
+                # Zombie process temizliği
+                cleanup_zombie_processes()
+
+                # FD monitoring — uyarı logu
+                fd_info = get_fd_info()
+                if fd_info["usage_percent"] > 75:
+                    logger.warning(
+                        f"⚠️ FD kullanımı yüksek: {fd_info['open_fds']}/{fd_info['soft_limit']} "
+                        f"(%{fd_info['usage_percent']})"
+                    )
+                elif fd_info["open_fds"] > 0 and fd_info["open_fds"] % 100 == 0:
+                    logger.info(f"FD durumu: {fd_info['open_fds']}/{fd_info['soft_limit']}")
+
             except asyncio.CancelledError:
                 break
             except Exception as e:

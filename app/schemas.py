@@ -58,3 +58,4 @@ class HealthResponse(BaseModel):
     max_concurrent: int
     headless: bool
     browser: Optional[dict] = None
+    file_descriptors: Optional[dict] = None
